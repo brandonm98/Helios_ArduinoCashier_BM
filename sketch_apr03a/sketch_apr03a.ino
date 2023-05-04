@@ -79,6 +79,7 @@ void calibrate()
   }
   LoadCell.refreshDataSet();                                    // refresh the dataset to be sure that the known mass is measured correct
   newCalibrationValue = LoadCell.getNewCalibration(known_mass); // get the new calibration value
+  delay(150);
   EEPROM.put(calVal_eepromAdress, newCalibrationValue);
   EEPROM.get(calVal_eepromAdress, newCalibrationValue);
   LoadCell.setCalFactor(newCalibrationValue);
@@ -101,7 +102,7 @@ void reset()
   amountDispensed3 = 0;
   tara = 13;
   incomingString = "";
-  delay(250);
+  delay(120);
 }
 /////////////////////////////////////////////
 void alarm()
@@ -207,9 +208,9 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(sensorPin2), coinPulse2, RISING);
   attachInterrupt(digitalPinToInterrupt(sensorPin3), coinPulse3, RISING);
   // pull up resistence for sensosr (ensure a value always on digital pin)
-  pinMode(sensorPin, INPUT_PULLUP);
-  pinMode(sensorPin2, INPUT_PULLUP);
-  pinMode(sensorPin3, INPUT_PULLUP);
+  pinMode(sensorPin, INPUT);
+  pinMode(sensorPin2, INPUT);
+  pinMode(sensorPin3, INPUT);
   // Motor control
   pinMode(motorPin, OUTPUT);
   pinMode(motorPin2, OUTPUT);
@@ -228,6 +229,9 @@ void setup()
   // init temp sens
   dht.begin();
   EEPROM.get(calVal_eepromAdress, newCalibrationValue);
+  if(isnan(newCalibrationValue)){
+    newCalibrationValue = -20.15;
+  }
   LoadCell.begin();
   // time to calibrate load cell
   long stabilisingtime = 5000;
@@ -279,7 +283,7 @@ void loop()
         while (amountDispensed != quantity)
         {
           digitalWrite(motorPin, HIGH);
-          delay(90);
+          // delay(120);
           flag = 1;
         }
         digitalWrite(motorPin, LOW);
@@ -287,7 +291,7 @@ void loop()
         while (amountDispensed2 != quantity2)
         {
           digitalWrite(motorPin2, HIGH);
-          delay(90);
+          // delay(120);
           flag2 = 1;
         }
         digitalWrite(motorPin2, LOW);
@@ -295,7 +299,7 @@ void loop()
         while (amountDispensed3 != quantity3)
         {
           digitalWrite(motorPin3, HIGH);
-          delay(90);
+          // delay(120);
           flag5 = 1;
         }
         digitalWrite(motorPin3, LOW);
