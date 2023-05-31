@@ -39,6 +39,7 @@ int quantity3;
 
 HX711_ADC LoadCell(2, 3); // DT, SCK
 long t;
+long to_start;
 
 int ind1;
 int ind2;
@@ -280,27 +281,29 @@ void loop()
         quantity3 = incomingString.substring(ind2 + 1, ind3).toInt();
 
         // Give coins for each hopper
+        to_start = millis();
         while (amountDispensed != quantity)
         {
           digitalWrite(motorPin, HIGH);
-          // delay(120);
           flag = 1;
+          if(millis()-to_start > 15000){break;}
         }
         digitalWrite(motorPin, LOW);
 
+        to_start = millis();
         while (amountDispensed2 != quantity2)
         {
           digitalWrite(motorPin2, HIGH);
-          // delay(120);
           flag2 = 1;
+          if(millis()-to_start > 15000){break;}
         }
         digitalWrite(motorPin2, LOW);
-
+        to_start = millis();
         while (amountDispensed3 != quantity3)
         {
           digitalWrite(motorPin3, HIGH);
-          // delay(120);
           flag5 = 1;
+          if(millis()-to_start > 15000){break;}
         }
         digitalWrite(motorPin3, LOW);
         Serial.println("DONE");
