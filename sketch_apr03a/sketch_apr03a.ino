@@ -1,6 +1,4 @@
-#include <HX711_ADC.h>
 #include "DHT.h"
-#include <EEPROM.h>
 // IR sensor pin
 #define PIRPin 40
 #define IRPin 42
@@ -37,7 +35,6 @@ int quantity;
 int quantity2;
 int quantity3;
 
-HX711_ADC LoadCell(2, 3); // DT, SCK
 long t;
 long to_start;
 
@@ -47,49 +44,7 @@ int ind3;
 String incomingString;
 byte tara;
 //////////////////////////////////////////////
-const int calVal_eepromAdress = 0;
-float newCalibrationValue;
-//////////////////////////////////////////////
-void calibrate()
-{
-  Serial.println("***");
-  Serial.println("Start calibration:");
-  Serial.println("Place the load cell an a level stable surface.");
-  Serial.println("Remove any load applied to the load cell.");
-  LoadCell.update();
-  LoadCell.tare();
-  Serial.println("Tare complete");
-  boolean _resume = false;
-  Serial.println("Now, place your known mass on the loadcell.");
-  Serial.println("Then send the weight of this mass (i.e. 100.0) from serial monitor.");
-  float known_mass = 0;
-  _resume = false;
-  while (_resume == false)
-  {
-    LoadCell.update();
-    if (Serial.available() > 0)
-    {
-      known_mass = Serial.parseFloat();
-      if (known_mass != 0)
-      {
-        Serial.print("Known mass is: ");
-        Serial.println(known_mass);
-        _resume = true;
-      }
-    }
-  }
-  LoadCell.refreshDataSet();                                    // refresh the dataset to be sure that the known mass is measured correct
-  newCalibrationValue = LoadCell.getNewCalibration(known_mass); // get the new calibration value
-  delay(150);
-  EEPROM.put(calVal_eepromAdress, newCalibrationValue);
-  EEPROM.get(calVal_eepromAdress, newCalibrationValue);
-  LoadCell.setCalFactor(newCalibrationValue);
-  Serial.print("Value ");
-  Serial.print(newCalibrationValue);
-  Serial.print(" saved to EEPROM address: ");
-  Serial.println(calVal_eepromAdress);
-  Serial.println("End calibration");
-}
+char buffer[100];
 //////////////////////////////////////////////
 void reset()
 {
@@ -123,8 +78,6 @@ void sensores()
 {
   if (millis() > t + 100)
   {
-    LoadCell.update();
-    long i = LoadCell.getData();
     float h = dht.readHumidity();
     int temp = dht.readTemperature();
     float f = dht.readTemperature(true);
@@ -158,11 +111,9 @@ void sensores()
     {
       pos = 0;
     }
-    Serial.println(i);
     t = millis();
   }
 }
-
 ////////////////////////////////////////////////////////////////////////////////
 void coinPulse()
 {
@@ -229,18 +180,7 @@ void setup()
 
   // init temp sens
   dht.begin();
-  EEPROM.get(calVal_eepromAdress, newCalibrationValue);
-  if(isnan(newCalibrationValue)){
-    newCalibrationValue = -20.15;
-  }
-  LoadCell.begin();
-  // time to calibrate load cell
-  long stabilisingtime = 5000;
-  LoadCell.start(stabilisingtime);
-  Serial.println("Cal val:");
-  Serial.println(newCalibrationValue);
-  LoadCell.setCalFactor(newCalibrationValue); // user set calibration factor (float)
-  Serial.println("Startup + calibration is complete");
+  Serial.println("Startup is complete");
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 void loop()
@@ -255,67 +195,50 @@ void loop()
   if (Serial.available())
   {
     byte tara = Serial.read();
-
-    // tara == 't' in ascii code
-    if (tara == 116)
+    if (tara >= 48 and tara <= 57)
     {
-      int i = 0;
-      LoadCell.tare();
-      Serial.println("Tare complete");
-    }
-    else
-    {
-      if (tara >= 48 and tara <= 57)
-      {
-        flag4 = 1;
-        while (Serial.available() == 0)
-        {
-        }
-        incomingString = char(tara) + Serial.readString();
-        incomingString.trim();
-        ind1 = incomingString.indexOf(',');
-        quantity = incomingString.substring(0, ind1).toInt();
-        ind2 = incomingString.indexOf(',', ind1 + 1);
-        quantity2 = incomingString.substring(ind1 + 1, ind2).toInt();
-        ind3 = incomingString.indexOf(',', ind2 + 1);
-        quantity3 = incomingString.substring(ind2 + 1, ind3).toInt();
+      flag4 = 1;
+      while (Serial.available() == 0){}
+      incomingString = char(tara) + Serial.readString();
+      incomingString.trim();
+      ind1 = incomingString.indexOf(',');
+      quantity = incomingString.substring(0, ind1).toInt();
+      ind2 = incomingString.indexOf(',', ind1 + 1);
+      quantity2 = incomingString.substring(ind1 + 1, ind2).toInt();
+      ind3 = incomingString.indexOf(',', ind2 + 1);
+      quantity3 = incomingString.substring(ind2 + 1, ind3).toInt();
 
-        // Give coins for each hopper
-        to_start = millis();
-        while (amountDispensed != quantity)
-        {
-          digitalWrite(motorPin, HIGH);
-          flag = 1;
-          if(millis()-to_start > 15000){break;}
-        }
-        digitalWrite(motorPin, LOW);
-
-        to_start = millis();
-        while (amountDispensed2 != quantity2)
-        {
-          digitalWrite(motorPin2, HIGH);
-          flag2 = 1;
-          if(millis()-to_start > 15000){break;}
-        }
-        digitalWrite(motorPin2, LOW);
-        to_start = millis();
-        while (amountDispensed3 != quantity3)
-        {
-          digitalWrite(motorPin3, HIGH);
-          flag5 = 1;
-          if(millis()-to_start > 15000){break;}
-        }
-        digitalWrite(motorPin3, LOW);
-        Serial.println("DONE");
-      }
-      else
+      // Give coins for each hopper
+      to_start = millis();
+      while (amountDispensed != quantity)
       {
-        if (tara == 99)
-        {
-          calibrate();
-        }
+        digitalWrite(motorPin, HIGH);
+        flag = 1;
+        if(millis()-to_start > 15000){break;}
       }
+      digitalWrite(motorPin, LOW);
+
+      to_start = millis();
+      while (amountDispensed2 != quantity2)
+      {
+        digitalWrite(motorPin2, HIGH);
+        flag2 = 1;
+        if(millis()-to_start > 15000){break;}
+      }
+      digitalWrite(motorPin2, LOW);
+      to_start = millis();
+      while (amountDispensed3 != quantity3)
+      {
+        digitalWrite(motorPin3, HIGH);
+        flag5 = 1;
+        if(millis()-to_start > 15000){break;}
+      }
+      digitalWrite(motorPin3, LOW);
+      sprintf(buffer, "%d,%d,%d", quantity-amountDispensed, quantity2-amountDispensed2, quantity3-amountDispensed3);
+      Serial.println(buffer);
+      Serial.println("");
+      Serial.println("DONE");
     }
-    reset();
   }
+  reset();
 }
