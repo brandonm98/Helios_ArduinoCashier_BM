@@ -8,91 +8,87 @@
 #define motorPin2 5
 #define motorPin3 A4
 
-volatile int amountDispensed = 0;
-volatile int amountDispensed2 = 0;
-volatile int amountDispensed3 = 0;
+volatile unsigned int amountDispensed = 0;
 
-int flag = 0;  // CONT1
-int flag2 = 0; // CONT2
-int flag4 = 0; // SERIAL COM
-int flag5 = 0; // CONT3
-
-int quantity;
-int quantity2;
-int quantity3;
-
-long to_start;
-
-byte tara;
 uint8_t bufPtr = 0;
+byte rb_char;
+unsigned int conv_buf = 0;
 //////////////////////////////////////////////
 char buffer[20];
-char receivedChars[20];
+unsigned int receivedChars[3];
 //////////////////////////////////////////////
 void flush() {
-  bufPtr = 0;
-  for (uint8_t i = 0; i < 8; i++) {
-    receivedChars[i] = ' ';
+  for (uint8_t i = 0; i < 20; i++) {
     buffer[i] = ' ';
+  }
+}
+
+void rst_receivedChars(){
+  for (uint8_t i = 0; i < 3; i++) {
+    receivedChars[i] = 0;
   }
 }
 void reset()
 {
-  flag = 0;  // CONT1
-  flag2 = 0; // CONT2
-  flag4 = 0; // SERIAL COM
-  flag5 = 0; // CONT3
   amountDispensed = 0;
-  amountDispensed2 = 0;
-  amountDispensed3 = 0;
-  tara = 13;
   flush();
+  rst_receivedChars();
 }
 ////////////////////////////////////////////////////////////////////////////////
 void coinPulse()
 {
-  if (flag == 1)
-  {
-    ++amountDispensed;
+  ++amountDispensed;
+}
+
+void convert_serial_frame(){
+  bufPtr = 0;
+  while(true){
+    rb_char = Serial.read();
+    if(rb_char != 255){
+      if(rb_char == 44){
+        receivedChars[bufPtr] = conv_buf;
+        conv_buf = 0;
+        bufPtr++;
+      }else{
+        if(rb_char != 62){
+          if(conv_buf == 0){
+            conv_buf = (int(rb_char)-48);
+          }else{
+            conv_buf *= 10;
+            conv_buf += (int(rb_char)-48);
+          }
+        }else{
+          receivedChars[bufPtr] = conv_buf;
+          conv_buf = 0;
+          break;
+        }
+      }
+    }
   }
-  else
-  {
+}
+
+int processMotor(unsigned int motorPin_x, unsigned int qnt){
+  int not_dispensed = 0;
+  long to_start = millis();
+    while (amountDispensed != qnt)
+    {
+      digitalWrite(motorPin_x, HIGH);
+      if(millis()-to_start > 15000){break;}
+    }
+    not_dispensed = qnt - amountDispensed;
     amountDispensed = 0;
-  }
+    digitalWrite(motorPin_x, LOW);
+    return not_dispensed;
 }
 
-void coinPulse2()
-{
-  if (flag2 == 1)
-  {
-    ++amountDispensed2;
-  }
-  else
-  {
-    amountDispensed2 = 0;
-  }
-}
-
-void coinPulse3()
-{
-  if (flag5 == 1)
-  {
-    ++amountDispensed3;
-  }
-  else
-  {
-    amountDispensed3 = 0;
-  }
-}
-///////////////////////////////////////////////////////////////////////////////////////////////////////
 void setup()
 {
   Serial.begin(9600);
   // Define parallel special routine for hopper motor and sensor
   // Start motor if trigger, when sensor go from low to high stop thread
   attachInterrupt(digitalPinToInterrupt(sensorPin), coinPulse, RISING);
-  attachInterrupt(digitalPinToInterrupt(sensorPin2), coinPulse2, RISING);
-  attachInterrupt(digitalPinToInterrupt(sensorPin3), coinPulse3, RISING);
+  attachInterrupt(digitalPinToInterrupt(sensorPin2), coinPulse, RISING);
+  attachInterrupt(digitalPinToInterrupt(sensorPin3), coinPulse, RISING);
   // pull up resistence for sensosr (ensure a value always on digital pin)
   pinMode(sensorPin, INPUT);
   pinMode(sensorPin2, INPUT);
@@ -111,60 +107,22 @@ void setup()
   }
   Serial.println("Startup is complete");
 }
-/////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void loop()
 {
   ///////////////TARA
-
   if (Serial.available())
   {
-    byte tara = Serial.read();
-    if (tara >= 48 and tara <= 57)
+    byte rx_char = Serial.read();
+    if (rx_char == 60)
     {
-      flag4 = 1;
-      bufPtr = 1;
-      byte rb_char;
-      receivedChars[0] = char(tara);
-      while(true){
-        rb_char = Serial.read();
-        if(rb_char != 255){
-          receivedChars[bufPtr] = char(rb_char);
-          bufPtr++;
-          if (bufPtr == 5){
-            break;
-          }
-        }
-      }
-      quantity = int(receivedChars[0])-48;
-      quantity2 = int(receivedChars[2])-48;
-      quantity3 = int(receivedChars[4])-48;
-      // Give coins for each hopper
-      to_start = millis();
-      while (amountDispensed != quantity)
-      {
-        digitalWrite(motorPin, HIGH);
-        flag = 1;
-        if(millis()-to_start > 15000){break;}
-      }
-      digitalWrite(motorPin, LOW);
+      convert_serial_frame();
 
-      to_start = millis();
-      while (amountDispensed2 != quantity2)
-      {
-        digitalWrite(motorPin2, HIGH);
-        flag2 = 1;
-        if(millis()-to_start > 15000){break;}
-      }
-      digitalWrite(motorPin2, LOW);
-      to_start = millis();
-      while (amountDispensed3 != quantity3)
-      {
-        digitalWrite(motorPin3, HIGH);
-        flag5 = 1;
-        if(millis()-to_start > 15000){break;}
-      }
-      digitalWrite(motorPin3, LOW);
-      sprintf(buffer, "%d,%d,%d", quantity-amountDispensed, quantity2-amountDispensed2, quantity3-amountDispensed3);
+      int rs1 = processMotor(motorPin, receivedChars[0]);
+      int rs2 = processMotor(motorPin2, receivedChars[1]);
+      int rs3 = processMotor(motorPin3,  receivedChars[2]);
+
+      sprintf(buffer, "%d,%d,%d", rs1, rs2, rs3);
       Serial.println(buffer);
       Serial.println("DONE");
     }
