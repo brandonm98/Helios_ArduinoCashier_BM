@@ -1,151 +1,101 @@
-// hopper sensor pin
-#define sensorPin 21
-#define sensorPin2 20
-#define sensorPin3 19
+// Hopper sensor and motor pins
+#define SENSOR_PIN1 21
+#define SENSOR_PIN2 20
+#define SENSOR_PIN3 19
 
-// motor pin
-#define motorPin 51
-#define motorPin2 50
-#define motorPin3 48
+#define MOTOR_PIN1 51
+#define MOTOR_PIN2 50
+#define MOTOR_PIN3 48
 
-volatile unsigned int amountDispensed = 0;
+volatile unsigned int dispensed[3] = {0, 0, 0};  // Array to track dispensed amounts
+unsigned int quantities[3] = {0, 0, 0};  // Array to store input quantities
 
-uint8_t bufPtr = 0;
-byte rb_char;
-unsigned int conv_buf = 0;
+char buffer[50]; // Buffer for formatting output
 
-char buffer[20];
-unsigned int receivedChars[3];
-
-void flush()
-{
-  for (uint8_t i = 0; i < 20; i++)
-  {
-    buffer[i] = ' ';
-  }
-}
-
-void rst_receivedChars()
-{
-  for (uint8_t i = 0; i < 3; i++)
-  {
-    receivedChars[i] = 0;
-  }
-}
-void reset()
-{
-  amountDispensed = 0;
-  flush();
-  rst_receivedChars();
-}
-
-void coinPulse()
-{
-  ++amountDispensed;
-}
-
-void convert_serial_frame()
-{
-  bufPtr = 0;
-  while (true)
-  {
-    rb_char = Serial.read();
-    if (rb_char != 255)
-    {
-      if (rb_char == 44)
-      {
-        receivedChars[bufPtr] = conv_buf;
-        conv_buf = 0;
-        bufPtr++;
-      }
-      else
-      {
-        if (rb_char != 62)
-        {
-          if (conv_buf == 0)
-          {
-            conv_buf = (int(rb_char) - 48);
-          }
-          else
-          {
-            conv_buf *= 10;
-            conv_buf += (int(rb_char) - 48);
-          }
-        }
-        else
-        {
-          receivedChars[bufPtr] = conv_buf;
-          conv_buf = 0;
-          break;
-        }
-      }
-    }
-  }
-}
-
-int processMotor(unsigned int motorPin_x, unsigned int qnt)
-{
-  int not_dispensed = 0;
-  long to_start = millis();
-  while (amountDispensed != qnt)
-  {
-    digitalWrite(motorPin_x, HIGH);
-    if (millis() - to_start > 15000)
-    {
-      break;
-    }
-  }
-  not_dispensed = qnt - amountDispensed;
-  amountDispensed = 0;
-  digitalWrite(motorPin_x, LOW);
-  return not_dispensed;
-}
-
-void setup()
-{
+void setup() {
   Serial.begin(9600);
-  // Define parallel special routine for hopper motor and sensor
-  // Start motor if trigger, when sensor go from low to high stop thread
-  attachInterrupt(digitalPinToInterrupt(sensorPin), coinPulse, RISING);
-  attachInterrupt(digitalPinToInterrupt(sensorPin2), coinPulse, RISING);
-  attachInterrupt(digitalPinToInterrupt(sensorPin3), coinPulse, RISING);
-  // pull up resistence for sensosr (ensure a value always on digital pin)
-  pinMode(sensorPin, INPUT);
-  pinMode(sensorPin2, INPUT);
-  pinMode(sensorPin3, INPUT);
-  // Motor control
-  pinMode(motorPin, OUTPUT);
-  pinMode(motorPin2, OUTPUT);
-  pinMode(motorPin3, OUTPUT);
-  // Trun off hoppers
-  digitalWrite(motorPin, LOW);
-  digitalWrite(motorPin2, LOW);
-  digitalWrite(motorPin3, LOW);
 
-  while (!Serial)
-  {
-    ;
-  }
+  // Attach interrupts for sensors
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PIN1), [] { ++dispensed[0]; }, RISING);
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PIN2), [] { ++dispensed[1]; }, RISING);
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PIN3), [] { ++dispensed[2]; }, RISING);
+
+  // Configure sensor and motor pins
+  pinMode(SENSOR_PIN1, INPUT);
+  pinMode(SENSOR_PIN2, INPUT);
+  pinMode(SENSOR_PIN3, INPUT);
+  pinMode(MOTOR_PIN1, OUTPUT);
+  pinMode(MOTOR_PIN2, OUTPUT);
+  pinMode(MOTOR_PIN3, OUTPUT);
+
+  // Ensure motors are initially off
+  digitalWrite(MOTOR_PIN1, LOW);
+  digitalWrite(MOTOR_PIN2, LOW);
+  digitalWrite(MOTOR_PIN3, LOW);
+
   Serial.println("Startup is complete");
 }
 
-void loop()
-{
-  if (Serial.available())
-  {
-    byte rx_char = Serial.read();
-    if (rx_char == 60)
-    {
-      convert_serial_frame();
+void loop() {
+  if (Serial.available() && Serial.read() == '<') {
+    parseInput();
+    if (validInput()) {
+      int results[3];
+      results[0] = dispenseCoins(MOTOR_PIN1, 0);
+      results[1] = dispenseCoins(MOTOR_PIN2, 1);
+      results[2] = dispenseCoins(MOTOR_PIN3, 2);
+      sprintf(buffer, "%d,%d,%d\nDONE\n", results[0], results[1], results[2]);
+      Serial.print(buffer);
+    } else {
+      Serial.println("ERROR: Invalid input format");
+    }
+    reset();
+  }
+}
 
-      int rs1 = processMotor(motorPin, receivedChars[0]);
-      int rs2 = processMotor(motorPin2, receivedChars[1]);
-      int rs3 = processMotor(motorPin3, receivedChars[2]);
+void parseInput() {
+  memset(quantities, 0, sizeof(quantities));
+  char rb_char;
+  unsigned int conv_buf = 0, bufPtr = 0;
 
-      sprintf(buffer, "%d,%d,%d", rs1, rs2, rs3);
-      Serial.println(buffer);
-      Serial.println("DONE");
+  while (Serial.available() && bufPtr < 3) {
+    rb_char = Serial.read();
+    if (rb_char == ',') {
+      if (bufPtr < 3) {
+        quantities[bufPtr++] = conv_buf;
+        conv_buf = 0;
+      }
+    } else if (rb_char == '>') {
+      if (bufPtr < 3) {
+        quantities[bufPtr] = conv_buf;
+      }
+      break;
+    } else if (rb_char >= '0' && rb_char <= '9') {
+      conv_buf = conv_buf * 10 + (rb_char - '0');
     }
   }
-  reset();
+}
+
+bool validInput() {
+  return quantities[0] > 0 || quantities[1] > 0 || quantities[2] > 0;
+}
+
+int dispenseCoins(unsigned int motorPin, int index) {
+  long startTime = millis();
+  dispensed[index] = 0;
+
+  while (dispensed[index] < quantities[index]) {
+    digitalWrite(motorPin, HIGH);
+    if (millis() - startTime > 15000) {
+      break;
+    }
+  }
+
+  digitalWrite(motorPin, LOW);
+  int not_dispensed = dispensed[index] > quantities[index] ? 0 : quantities[index] - dispensed[index];
+  return not_dispensed;
+}
+
+void reset() {
+  memset(dispensed, 0, sizeof(dispensed));
 }
