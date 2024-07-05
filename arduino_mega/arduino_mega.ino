@@ -1,14 +1,14 @@
 // Hopper sensor and motor pins
-#define SENSOR_PIN1 21
-#define SENSOR_PIN2 20
+#define SENSOR_PIN1 20
+#define SENSOR_PIN2 21
 #define SENSOR_PIN3 19
 
-#define MOTOR_PIN1 51
-#define MOTOR_PIN2 50
+#define MOTOR_PIN1 42
+#define MOTOR_PIN2 43
 #define MOTOR_PIN3 48
 
-volatile unsigned int dispensed[3] = {0, 0, 0};  // Array to track dispensed amounts
-unsigned int quantities[3] = {0, 0, 0};  // Array to store input quantities
+volatile unsigned int dispensed[4] = {0, 0, 0, 0};  // Array to track dispensed amounts
+unsigned int quantities[4] = {0, 0, 0, 0};  // Array to store input quantities
 
 char buffer[50]; // Buffer for formatting output
 
@@ -24,6 +24,7 @@ void setup() {
   pinMode(SENSOR_PIN1, INPUT);
   pinMode(SENSOR_PIN2, INPUT);
   pinMode(SENSOR_PIN3, INPUT);
+
   pinMode(MOTOR_PIN1, OUTPUT);
   pinMode(MOTOR_PIN2, OUTPUT);
   pinMode(MOTOR_PIN3, OUTPUT);
@@ -44,7 +45,7 @@ void loop() {
       results[0] = dispenseCoins(MOTOR_PIN1, 0);
       results[1] = dispenseCoins(MOTOR_PIN2, 1);
       results[2] = dispenseCoins(MOTOR_PIN3, 2);
-      sprintf(buffer, "%d,%d,%d\nDONE\n", results[0], results[1], results[2]);
+      sprintf(buffer, "%d,%d,%d,%d\nDONE\n", results[0], results[1], results[2], 0);
       Serial.print(buffer);
     } else {
       Serial.println("ERROR: Invalid input format");
@@ -57,8 +58,7 @@ void parseInput() {
   memset(quantities, 0, sizeof(quantities));
   char rb_char;
   unsigned int conv_buf = 0, bufPtr = 0;
-
-  while (Serial.available() && bufPtr < 3) {
+  while (bufPtr < 3) {
     rb_char = Serial.read();
     if (rb_char == ',') {
       if (bufPtr < 3) {
@@ -77,7 +77,7 @@ void parseInput() {
 }
 
 bool validInput() {
-  return quantities[0] > 0 || quantities[1] > 0 || quantities[2] > 0;
+  return quantities[0] >= 0 || quantities[1] >= 0 || quantities[2] >= 0;
 }
 
 int dispenseCoins(unsigned int motorPin, int index) {
