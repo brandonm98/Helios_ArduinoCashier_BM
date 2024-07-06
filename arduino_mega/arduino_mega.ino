@@ -30,9 +30,9 @@ void setup() {
   pinMode(MOTOR_PIN3, OUTPUT);
 
   // Ensure motors are initially off
-  digitalWrite(MOTOR_PIN1, LOW);
-  digitalWrite(MOTOR_PIN2, LOW);
-  digitalWrite(MOTOR_PIN3, LOW);
+  digitalWrite(MOTOR_PIN1, HIGH);
+  digitalWrite(MOTOR_PIN2, HIGH);
+  digitalWrite(MOTOR_PIN3, HIGH);
 
   Serial.println("Startup is complete");
 }
@@ -85,13 +85,13 @@ int dispenseCoins(unsigned int motorPin, int index) {
   dispensed[index] = 0;
 
   while (dispensed[index] < quantities[index]) {
-    digitalWrite(motorPin, HIGH);
+    digitalWrite(motorPin, LOW);
     if (millis() - startTime > 15000) {
       break;
     }
   }
 
-  digitalWrite(motorPin, LOW);
+  digitalWrite(motorPin, HIGH);
   int not_dispensed = dispensed[index] > quantities[index] ? 0 : quantities[index] - dispensed[index];
   return not_dispensed;
 }
