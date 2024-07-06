@@ -1,11 +1,11 @@
 // Hopper sensor and motor pins
 #define SENSOR_PIN1 20
-#define SENSOR_PIN2 21
-#define SENSOR_PIN3 19
+#define SENSOR_PIN2 19
+#define SENSOR_PIN3 21
 
 #define MOTOR_PIN1 42
-#define MOTOR_PIN2 43
-#define MOTOR_PIN3 48
+#define MOTOR_PIN2 48
+#define MOTOR_PIN3 43
 
 volatile unsigned int dispensed[4] = {0, 0, 0, 0};  // Array to track dispensed amounts
 unsigned int quantities[4] = {0, 0, 0, 0};  // Array to store input quantities
